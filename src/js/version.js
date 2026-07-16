@@ -1,3 +1,3 @@
 export function getVersion() {
-  return 'v0.2.0';
+  return 'v0.3.0';
 }
