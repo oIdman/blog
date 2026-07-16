@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="A tiny, zero-dependency personal blog.">
+  <title>Tinylogue</title>
+  <link rel="stylesheet" href="./css/blog.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="site-title" href="#" aria-label="Home">Tiny<span>logue</span></a>
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="#">Home</a>
+        <a href="https://github.com" target="_blank" rel="noopener noreferrer">About</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section id="article-list" aria-label="Article list"></section>
+
+    <article id="article-view" class="hidden" aria-label="Full article">
+      <div id="article-content"></div>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <p>Tinylogue · <span id="version"></span></p>
+  </footer>
+
+  <script type="module" src="./js/blog.js"></script>
+</body>
+</html>
