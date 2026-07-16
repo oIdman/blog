@@ -1,10 +1,30 @@
 import { posts } from './posts.js';
 import { getVersion } from './version.js';
 
+const STORAGE_KEY = 'tinylogue-posts';
+
 const articleList = document.getElementById('article-list');
 const articleView = document.getElementById('article-view');
 const articleContent = document.getElementById('article-content');
+const editor = document.getElementById('editor');
 const siteTitle = document.querySelector('.site-title');
+
+// ── Load user posts from localStorage ──
+let userPosts = [];
+try {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  userPosts = raw ? JSON.parse(raw) : [];
+} catch (_) {
+  userPosts = [];
+}
+
+function saveUserPosts() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(userPosts));
+}
+
+function getAllPosts() {
+  return [...userPosts, ...posts];
+}
 
 function escapeHtml(text) {
   return text
@@ -125,29 +145,41 @@ function getPostSlug() {
 
 function renderArticleList() {
   articleView.classList.add('hidden');
+  editor.classList.add('hidden');
   articleList.classList.remove('hidden');
   document.title = 'Tinylogue';
 
+  const allPosts = getAllPosts();
   articleList.innerHTML = '<h1 class="page-heading">Latest Articles</h1>';
 
   const grid = document.createElement('div');
   grid.className = 'article-grid';
 
-  posts.forEach((post) => {
+  allPosts.forEach((post) => {
     const card = document.createElement('article');
     card.className = 'article-card';
+    const isUserPost = userPosts.find((p) => p.slug === post.slug);
     card.innerHTML = `
       <time class="article-date" datetime="${post.date}">${post.date}</time>
       <h2 class="article-card-title"><a href="#${post.slug}">${escapeHtml(post.title)}</a></h2>
       <p class="article-excerpt">${escapeHtml(post.excerpt)}</p>
-      <a class="read-more" href="#${post.slug}">Read article →</a>
+      <div class="card-actions">
+        <a class="read-more" href="#${post.slug}">Read →</a>
+        ${isUserPost ? `<button class="btn-small btn-edit" data-slug="${post.slug}">Edit</button>` : ''}
+      </div>
     `;
-    card.querySelectorAll('a').forEach((link) => {
+    card.querySelectorAll('.read-more').forEach((link) => {
       link.addEventListener('click', (event) => {
         event.preventDefault();
         window.location.hash = post.slug;
       });
     });
+    if (isUserPost) {
+      card.querySelector('.btn-edit').addEventListener('click', (event) => {
+        event.stopPropagation();
+        openEditor(post);
+      });
+    }
     grid.appendChild(card);
   });
 
@@ -155,7 +187,7 @@ function renderArticleList() {
 }
 
 function renderArticle(slug) {
-  const post = posts.find((p) => p.slug === slug);
+  const post = getAllPosts().find((p) => p.slug === slug);
   if (!post) {
     return renderArticleList();
   }
@@ -185,9 +217,89 @@ function renderArticle(slug) {
   });
 }
 
+// ── Editor ──
+function openEditor(post) {
+  articleList.classList.add('hidden');
+  articleView.classList.add('hidden');
+  editor.classList.remove('hidden');
+  document.title = post ? 'Edit Post' : 'New Post';
+
+  document.getElementById('edit-title').value = post ? post.title : '';
+  document.getElementById('edit-excerpt').value = post ? post.excerpt : '';
+  document.getElementById('edit-body').value = post ? post.content : '';
+  document.getElementById('edit-preview').innerHTML = post ? markdownToHTML(post.content) : '';
+  document.getElementById('btn-delete').classList.toggle('hidden', !post);
+
+  document.getElementById('editor-form').dataset.editSlug = post ? post.slug : '';
+}
+
+function closeEditor() {
+  editor.classList.add('hidden');
+  window.location.hash = '';
+}
+
+function savePost(e) {
+  e.preventDefault();
+  const form = e.target;
+  const title = document.getElementById('edit-title').value.trim();
+  const excerpt = document.getElementById('edit-excerpt').value.trim();
+  const body = document.getElementById('edit-body').value.trim();
+  if (!title || !body) return;
+
+  const editSlug = form.dataset.editSlug;
+  const slug = editSlug || title.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
+
+  const date = new Date().toISOString().slice(0, 10);
+
+  if (editSlug) {
+    // Update existing
+    const idx = userPosts.findIndex((p) => p.slug === editSlug);
+    if (idx !== -1) userPosts[idx] = { slug: editSlug, title, excerpt, date: userPosts[idx].date, content: body };
+  } else {
+    // Check slug collision
+    const allSlugs = getAllPosts().map((p) => p.slug);
+    if (allSlugs.includes(slug)) {
+      alert('A post with this slug already exists. Change the title.');
+      return;
+    }
+    userPosts.push({ slug, title, excerpt, date, content: body });
+  }
+
+  saveUserPosts();
+  closeEditor();
+  renderArticleList();
+}
+
+function deletePost(slug) {
+  if (!confirm('Delete this post?')) return;
+  userPosts = userPosts.filter((p) => p.slug !== slug);
+  saveUserPosts();
+  closeEditor();
+  renderArticleList();
+}
+
+// Live preview
+document.getElementById('edit-body').addEventListener('input', function () {
+  document.getElementById('edit-preview').innerHTML = markdownToHTML(this.value);
+});
+
+// Form submit
+document.getElementById('editor-form').addEventListener('submit', savePost);
+document.getElementById('btn-delete').addEventListener('click', function () {
+  deletePost(document.getElementById('editor-form').dataset.editSlug);
+});
+document.getElementById('editor-back').addEventListener('click', closeEditor);
+
 function route() {
   const slug = getPostSlug();
-  if (slug) {
+  if (slug === 'new') {
+    openEditor(null);
+  } else if (slug.startsWith('edit/')) {
+    const editSlug = slug.slice(5);
+    const post = getAllPosts().find((p) => p.slug === editSlug);
+    if (post) openEditor(post);
+    else renderArticleList();
+  } else if (slug) {
     renderArticle(slug);
   } else {
     renderArticleList();
