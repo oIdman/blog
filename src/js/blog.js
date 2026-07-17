@@ -258,7 +258,7 @@ function highlightCode(code, language) {
 function parseRoute() {
   const hash = window.location.hash.replace(/^#\/?/, '') || '/';
   if (hash === '/' || hash === '' || hash === 'home') return { page: 'home' };
-  if (hash === 'articles') return { page: 'home' };
+  if (hash === 'articles') return { page: 'articles' };
   if (hash === 'about') return { page: 'about' };
   if (hash.startsWith('article/')) return { page: 'article', slug: hash.slice(8) };
   return { page: 'home' };
@@ -272,10 +272,18 @@ function setActiveNav(page) {
 
 function showPage(pageName) {
   [homePage, articlePage, aboutPage].forEach((el) => el.classList.add('hidden'));
-  const target = pageName === 'home' ? homePage : pageName === 'article' ? articlePage : aboutPage;
+  let target;
+  if (pageName === 'home' || pageName === 'articles') {
+    target = homePage;
+  } else if (pageName === 'article') {
+    target = articlePage;
+  } else {
+    target = aboutPage;
+  }
   target.classList.remove('hidden');
   window.scrollTo({ top: 0, behavior: 'instant' });
-  setActiveNav(pageName === 'home' || pageName === 'articles' ? 'home' : pageName);
+  const navMap = { home: 'home', articles: 'articles', article: 'home', about: 'about' };
+  setActiveNav(navMap[pageName] || 'home');
 }
 
 function getFilteredPosts() {
@@ -473,6 +481,9 @@ function renderHome() {
   const start = (page - 1) * POSTS_PER_PAGE;
   const pagePosts = filtered.slice(start, start + POSTS_PER_PAGE);
 
+  const totalReads = posts.reduce((sum, p) => sum + p.readCount, 0);
+  const totalComments = posts.reduce((sum, p) => sum + p.commentCount, 0);
+
   let filterBar = '';
   if (state.activeCategory) {
     filterBar = `
@@ -493,6 +504,24 @@ function renderHome() {
 
   homePage.innerHTML = `
     ${renderBanner()}
+    <section class="stats-bar">
+      <div class="stat-item">
+        <span class="stat-value">${posts.length}</span>
+        <span class="stat-label">累计文章</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value">${categories.length}</span>
+        <span class="stat-label">文章分类</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value">${formatNumber(totalReads)}</span>
+        <span class="stat-label">总阅读量</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value">${formatNumber(totalComments)}</span>
+        <span class="stat-label">总评论数</span>
+      </div>
+    </section>
     ${renderSearch()}
     ${filterBar}
     <div class="two-column">
@@ -520,6 +549,63 @@ function renderHome() {
       state.activeCategory = null;
       state.currentPage = 1;
       renderHome();
+    });
+  }
+}
+
+function renderArticlesPage() {
+  const filtered = getFilteredPosts();
+
+  let filterBar = '';
+  if (state.activeCategory) {
+    filterBar = `
+      <div class="filter-bar">
+        <span>分类过滤：</span>
+        <strong>${escapeHtml(state.activeCategory)}</strong>
+        <button type="button" id="clear-filter">清除</button>
+      </div>
+    `;
+  }
+
+  const articlesHtml = filtered.length
+    ? filtered.map(renderArticleCard).join('')
+    : '<div class="empty-state">没有找到匹配的文章</div>';
+
+  homePage.innerHTML = `
+    <section class="banner" aria-label="全部文章">
+      <div class="banner-deco" aria-hidden="true">
+        <span style="left:8%;top:12%;transform:rotate(-6deg)">[</span>
+        <span style="left:20%;top:65%;transform:rotate(10deg)">]</span>
+        <span style="left:40%;top:18%;transform:rotate(7deg)">{</span>
+        <span style="left:55%;top:72%;transform:rotate(-12deg)">}</span>
+        <span style="left:72%;top:25%;transform:rotate(14deg)">/</span>
+        <span style="left:88%;top:60%;transform:rotate(-9deg)">\`</span>
+        <span style="left:15%;top:40%;transform:rotate(5deg)">&lt;</span>
+        <span style="left:80%;top:45%;transform:rotate(-3deg)">&gt;</span>
+      </div>
+      <h1 class="banner-title">全部文章</h1>
+      <p class="banner-subtitle">共 ${filtered.length} 篇 · ${categories.length} 个分类</p>
+    </section>
+    ${renderSearch()}
+    ${filterBar}
+    <div class="article-list">${articlesHtml}</div>
+  `;
+
+  showPage('articles');
+
+  document.title = state.searchQuery
+    ? `搜索：${state.searchQuery} · DevLog`
+    : state.activeCategory
+      ? `${state.activeCategory} · DevLog`
+      : '全部文章 · DevLog';
+
+  bindHomeEvents();
+
+  const clearFilter = document.getElementById('clear-filter');
+  if (clearFilter) {
+    clearFilter.addEventListener('click', () => {
+      state.activeCategory = null;
+      renderArticlesPage();
     });
   }
 }
@@ -635,6 +721,9 @@ function renderArticle(slug) {
 }
 
 function renderAbout() {
+  const totalReads = posts.reduce((sum, p) => sum + p.readCount, 0);
+  const totalComments = posts.reduce((sum, p) => sum + p.commentCount, 0);
+
   aboutPage.innerHTML = `
     <div class="about-container">
       <h1 class="about-title">关于我</h1>
@@ -648,54 +737,129 @@ function renderAbout() {
       </section>
 
       <section class="about-section">
-        <h3>技术栈</h3>
-        <div class="chips">
-          <span class="chip">Go</span>
-          <span class="chip">Python</span>
-          <span class="chip">Vue</span>
-          <span class="chip">MySQL</span>
-          <span class="chip">Docker</span>
-          <span class="chip">Git</span>
-          <span class="chip">Redis</span>
-          <span class="chip">Linux</span>
+        <h3>📊 博客数据</h3>
+        <div class="stats-bar">
+          <div class="stat-item">
+            <span class="stat-value">${posts.length}</span>
+            <span class="stat-label">发布文章</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value">${formatNumber(totalReads)}</span>
+            <span class="stat-label">累计阅读</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value">${formatNumber(totalComments)}</span>
+            <span class="stat-label">收到评论</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value">${categories.length}</span>
+            <span class="stat-label">覆盖分类</span>
+          </div>
         </div>
       </section>
 
       <section class="about-section">
-        <h3>个人介绍</h3>
-        <p>你好，我是一名热爱技术的后端开发者，日常工作主要围绕高可用服务、数据库优化和开发工具链建设展开。我相信好的代码应该像好文章一样清晰易读，因此一直坚持写技术博客来整理思路。</p>
-        <p>这个博客完全由纯 HTML、CSS 和 JavaScript 构建，没有使用任何前端框架或第三方依赖。之所以选择这种方式，是因为我希望它能像一本打开的笔记本一样，简单、快速、随时随地可读。</p>
-        <p>平时除了写代码，我也喜欢折腾终端工具、阅读技术书籍和参与开源社区。如果你对我的文章有任何想法，欢迎在评论区留言交流。</p>
+        <h3>🛠 技术栈</h3>
+        <div class="chips">
+          <span class="chip">Go</span>
+          <span class="chip">Python</span>
+          <span class="chip">JavaScript</span>
+          <span class="chip">TypeScript</span>
+          <span class="chip">Vue</span>
+          <span class="chip">MySQL</span>
+          <span class="chip">PostgreSQL</span>
+          <span class="chip">Redis</span>
+          <span class="chip">Docker</span>
+          <span class="chip">Kubernetes</span>
+          <span class="chip">Linux</span>
+          <span class="chip">Git</span>
+          <span class="chip">Nginx</span>
+          <span class="chip">REST API</span>
+          <span class="chip">gRPC</span>
+        </div>
       </section>
 
       <section class="about-section">
-        <h3>开源项目</h3>
+        <h3>📝 个人介绍</h3>
+        <p>你好，我是一名热爱技术的后端开发者。日常工作主要围绕高可用服务架构、数据库性能优化和开发工具链建设展开。我相信好的代码应该像好文章一样清晰易读，因此一直坚持写技术博客来整理和沉淀思路。</p>
+        <p>这个博客完全由纯 HTML、CSS 和 JavaScript 构建，没有使用任何前端框架或第三方依赖。之所以选择这种"返璞归真"的方式，是因为我希望它能像一本打开的笔记本一样——简单、快速、随时随地可读。不需要构建工具，不需要服务器，一个浏览器就够了。</p>
+        <p>平时除了写代码，我也喜欢折腾终端工具（从 Oh My Zsh 到 Fish，从 tmux 到 kitty）、阅读技术书籍（最近在读《数据密集型应用系统设计》）和参与开源社区。如果你对我的文章有任何想法或疑问，欢迎在文章评论区留言交流。</p>
+      </section>
+
+      <section class="about-section">
+        <h3>📅 技术历程</h3>
+        <div class="timeline">
+          <div class="timeline-item">
+            <div class="timeline-year">2018</div>
+            <div class="timeline-body">
+              <strong>大学接触编程</strong>
+              <p>从 C 语言课设开始，意外爱上了写代码的感觉。课余自学 Python 和 Web 开发。</p>
+            </div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-year">2020</div>
+            <div class="timeline-body">
+              <strong>第一份后端工作</strong>
+              <p>加入初创公司从事 Go 后端开发，负责 API 设计和微服务架构，开始系统学习分布式系统。</p>
+            </div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-year">2022</div>
+            <div class="timeline-body">
+              <strong>深入云原生</strong>
+              <p>开始在项目中实践 Docker + Kubernetes，探索 CI/CD 自动化流程和可观测性体系建设。</p>
+            </div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-year">2024</div>
+            <div class="timeline-body">
+              <strong>搭建技术博客</strong>
+              <p>决定用纯前端方式搭建个人博客，从零开始手写 Markdown 解析器和博客引擎，目前仍在持续迭代。</p>
+            </div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-year">至今</div>
+            <div class="timeline-body">
+              <strong>持续输出</strong>
+              <p>坚持写作记录技术思考，关注后端开发、数据库、系统设计和开发者工具等方向。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="about-section">
+        <h3>📦 开源项目</h3>
         <div class="project-grid">
           <article class="project-card">
             <h4>tiny-cache</h4>
-            <p>一个基于 Go 实现的高性能本地缓存库，支持 TTL、LRU 淘汰和并发安全。</p>
+            <p>基于 Go 实现的高性能本地缓存库，支持 TTL、LRU/LFU 淘汰策略和并发安全，单机吞吐量超百万 QPS。</p>
             <a href="https://github.com" target="_blank" rel="noopener noreferrer">查看仓库 →</a>
           </article>
           <article class="project-card">
             <h4>md-reader</h4>
-            <p>轻量级 Markdown 渲染器，零依赖，可直接在浏览器中运行。</p>
+            <p>轻量级 Markdown 渲染器，零外部依赖，支持代码高亮、表格和任务列表，可在浏览器中直接运行。</p>
             <a href="https://github.com" target="_blank" rel="noopener noreferrer">查看仓库 →</a>
           </article>
           <article class="project-card">
             <h4>cli-helper</h4>
-            <p>收集日常开发中常用的 Shell 脚本和命令行小技巧。</p>
+            <p>收集日常开发中常用的 Shell 脚本和命令行小技巧，致力于提升终端工作效率。</p>
+            <a href="https://github.com" target="_blank" rel="noopener noreferrer">查看仓库 →</a>
+          </article>
+          <article class="project-card">
+            <h4>devlog</h4>
+            <p>本博客的完整源代码，一个零依赖、纯前端的 SPA 博客系统，支持 Markdown 渲染和评论功能。</p>
             <a href="https://github.com" target="_blank" rel="noopener noreferrer">查看仓库 →</a>
           </article>
         </div>
       </section>
 
       <section class="about-section">
-        <h3>联系方式</h3>
+        <h3>📬 联系方式</h3>
         <ul class="contact-list">
-          <li><span>🐙</span> <a href="https://github.com" target="_blank" rel="noopener noreferrer">GitHub</a></li>
-          <li><span>🐴</span> <a href="https://gitee.com" target="_blank" rel="noopener noreferrer">Gitee</a></li>
-          <li><span>✉️</span> <a href="mailto:devlog@example.com">devlog@example.com</a></li>
-          <li><span>📙</span> <a href="https://juejin.cn" target="_blank" rel="noopener noreferrer">掘金</a></li>
+          <li><span>🐙</span> <a href="https://github.com" target="_blank" rel="noopener noreferrer">GitHub</a> — 开源项目和技术动态</li>
+          <li><span>🐴</span> <a href="https://gitee.com" target="_blank" rel="noopener noreferrer">Gitee</a> — 国内镜像仓库</li>
+          <li><span>✉️</span> <a href="mailto:devlog@example.com">devlog@example.com</a> — 邮件联系</li>
+          <li><span>📙</span> <a href="https://juejin.cn" target="_blank" rel="noopener noreferrer">掘金</a> — 技术文章同步</li>
         </ul>
       </section>
     </div>
@@ -711,6 +875,8 @@ function render() {
     renderArticle(route.slug);
   } else if (route.page === 'about') {
     renderAbout();
+  } else if (route.page === 'articles') {
+    renderArticlesPage();
   } else {
     renderHome();
   }
