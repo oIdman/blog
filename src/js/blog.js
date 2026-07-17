@@ -1,6 +1,3 @@
-import { posts, categories } from './posts.js';
-import { getVersion } from './version.js';
-
 const POSTS_PER_PAGE = 5;
 const COMMENT_KEY_PREFIX = 'blog-comments-';
 

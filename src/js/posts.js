@@ -1,4 +1,4 @@
-export const posts = [
+const posts = [
   {
     slug: 'go-1-22-new-features',
     title: 'Go 1.22 新特性解读',
@@ -492,4 +492,4 @@ export HISTCONTROL=ignoredups
   }
 ];
 
-export const categories = [...new Set(posts.map(p => p.category))];
+const categories = [...new Set(posts.map(p => p.category))];
